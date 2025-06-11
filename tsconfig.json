@@ -1,0 +1,28 @@
+{
+  "include": [
+    "src",
+  ],
+  "compilerOptions": {
+    "target": "es5",
+    "lib": [
+      "es2020",
+      "dom",
+      "es2021.weakref"
+    ],
+    "moduleResolution": "node",
+    "sourceMap": true,
+    "allowJs": true,
+    "esModuleInterop": true,
+    "outDir": "lib",
+    "strict": false,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "noFallthroughCasesInSwitch": true,
+    "module": "esnext",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "downlevelIteration": true,
+    "jsx": "react-jsx",
+    "skipLibCheck": true
+  }
+}

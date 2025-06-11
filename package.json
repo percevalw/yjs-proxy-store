@@ -1,0 +1,73 @@
+{
+  "name": "yjs-proxy-store",
+  "version": "0.1.0",
+  "main": "src/lib/index.tsx",
+  "description": "Interact with YJS shared types using simple react hooks and proxies",
+  "repository": "https://github.com/percevalw/yjs-proxy-store",
+  "author": "Perceval Wajsbürt <perceval.wajsburt@gmail.com>",
+  "private": "true",
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject",
+    "build:lib": "sh scripts/build_lib.sh",
+    "prepublishOnly": "npm run build:lib"
+  },
+  "dependencies": {
+    "yjs": "*"
+  },
+  "peerDependencies": {
+    "react": ">=17.0.0",
+    "react-dom": ">=17.0.0"
+  },
+  "devDependencies": {
+    "@jupyterlab/builder": "^3.6.3",
+    "@playwright/test": "^1.51.0",
+    "@testing-library/dom": "^10.4.0",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.2.0",
+    "@testing-library/user-event": "^13.5.0",
+    "@types/jest": "^27.5.2",
+    "@types/node": "^16.18.126",
+    "@types/react": "^18.2.20",
+    "@types/react-dom": "^18.2.7",
+    "babel-cli": "^6.26.0",
+    "css-loader": ">6.0.0",
+    "husky": ">=6",
+    "lint-staged": ">=10",
+    "prettier": "^3.5.3",
+    "react": "^18.2.0",
+    "react-app-rewired": "^2.2.1",
+    "react-dom": "^18.2.0",
+    "react-scripts": "5.0.1",
+    "ts-loader": "^9.5.2",
+    "typescript": "^5.8.2",
+    "web-vitals": "^2.1.4"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "prettier": {
+    "printWidth": 120,
+    "tabWidth": 4
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "lint-staged": {
+    "*.{js,css,md}": "prettier --write"
+  }
+}
