@@ -1,277 +1,358 @@
 import * as Y from "yjs";
-import { useSyncExternalStore } from "react";
+import { useSyncExternalStore } from "use-sync-external-store/shim";
 
 // Symbols
 export const YJS = Symbol("YJS");
 export const INTERNALS = Symbol("INTERNALS");
 
 function normalize(val) {
-    // If the user puts in a plain object → convert to Y.Map for deep sync
-    if (Array.isArray(val)) {
-        const yArray = new Y.Array();
-        yArray.insert(0, val.map(normalize));
-        return yArray;
-    } else if (val && typeof val === "object" && !(val instanceof Y.AbstractType)) {
-        const yMap = new Y.Map();
-        Object.entries(val).forEach(([k, v]) => yMap.set(k, normalize(v)));
-        return yMap;
-    }
-    return val;
+  // If the user puts in a plain object → convert to Y.Map for deep sync
+  if (Array.isArray(val)) {
+    const yArray = new Y.Array();
+    yArray.insert(0, val.map(normalize));
+    return yArray;
+  } else if (
+    val &&
+    typeof val === "object" &&
+    !(val instanceof Y.AbstractType)
+  ) {
+    const yMap = new Y.Map();
+    Object.entries(val).forEach(([k, v]) => yMap.set(k, normalize(v)));
+    return yMap;
+  }
+  return val;
 }
 
 /* Base proxy to access and mutate Y.Map and Y.Array objects */
-export function MapProxy(yObj, tracking: boolean = false) {
-    if (!(yObj instanceof Y.AbstractType)) {
-        throw new TypeError("yProxy() expects a Y.Map or Y.Array");
-    }
+function MapProxy(yObj: any) {
+  if (!(yObj instanceof Y.AbstractType)) {
+    throw new TypeError("yProxy() expects a Y.Map or Y.Array");
+  }
 
-    const handler = {
-        get(target, prop, receiver) {
-            switch (prop) {
-                case YJS:
-                    // Return the underlying YJS object
-                    return yObj;
-                case INTERNALS:
-                    // Return internal properties (eg, observer)
-                    // @ts-ignore
-                    return target.internals;
-                case "toString":
-                    return () => JSON.stringify(target.toJSON());
-                case "toJSON":
-                    return () => target.toJSON();
-                case Symbol.toPrimitive:
-                    return (hint: string) => (hint === "string" ? JSON.stringify(target.toJSON()) : target); // for "number" / "default" hints
+  const MapProxyHandler: ProxyHandler<{}> = {
+    get(target, prop, receiver) {
+      switch (prop) {
+        case YJS:
+          // Return the underlying YJS object
+          return yObj;
+        case INTERNALS:
+          // Return internal properties (eg, observer)
+          // @ts-ignore
+          return yObj.internals;
+        case "toString":
+          return () => JSON.stringify(yObj.toJSON());
+        case "toJSON":
+          return () => {
+            if ((yObj as any).json === undefined) {
+              (yObj as any).json = yObj.toJSON();
             }
-            if (typeof prop === "symbol" || prop in Object.prototype) {
-                return Reflect.get(target, prop, receiver);
-            }
-            const val = target.get(prop);
-            return proxy(val, tracking);
-        },
+            return (yObj as any).json;
+          };
+        case Symbol.toPrimitive:
+          return (hint: string) =>
+            hint === "string" ? JSON.stringify(yObj.toJSON()) : yObj; // for "number" / "default" hints
+      }
+      if (typeof prop === "symbol" || prop in Object.prototype) {
+        return Reflect.get(yObj, prop, receiver);
+      }
+      const val = (yObj as any).get(prop);
+      return proxy(val);
+    },
 
-        set(target, prop, value) {
-            target.set(prop, normalize(value));
-            return true;
-        },
+    set(target, prop: string, value) {
+      (yObj as any).set(prop, normalize(value));
+      return true;
+    },
 
-        deleteProperty(target, prop) {
-            target.delete(prop);
-            return true;
-        },
+    deleteProperty(target, prop: string) {
+      (yObj as any).delete(prop);
+      return true;
+    },
 
-        ownKeys(target) {
-            return Array.from(target.keys()) as string[];
-        },
-        has(target, prop) {
-            return target.has(prop);
-        },
-        getOwnPropertyDescriptor() {
-            // Required so that Object.keys / for…in work
-            return { enumerable: true, configurable: true };
-        },
-    };
+    ownKeys(target) {
+      return Array.from((yObj as any).keys()) as string[];
+    },
+    has(target, prop: string) {
+      return (yObj as any).has(prop);
+    },
+    getOwnPropertyDescriptor(target, name) {
+      // Required so that Object.keys / for…in work
+      return {
+          //use a logical set of descriptors:
+          enumerable : true,
+          configurable : true,
+      };
+    },
+  };
 
-    return new Proxy(yObj, handler); // return the proxy
+  return new Proxy({}, MapProxyHandler); // return the proxy
 }
 
-export function ArrayProxy<T>(yObj: Y.Array<T>, tracking: boolean = false) {
-    if (!(yObj instanceof Y.AbstractType)) {
-        throw new TypeError("yProxy() expects a Y.Map or Y.Array");
-    }
+function ArrayProxy<T>(yObj: Y.Array<T>) {
+  if (!(yObj instanceof Y.AbstractType)) {
+    throw new TypeError("yProxy() expects a Y.Map or Y.Array");
+  }
 
-    /* Mutation methods */
-    function splice(this: Y.Array<T>, start: number, deleteCount?: number, ...items: T[]): void {
-        // turn splice into Y.Array.insert + Y.Array.delete
-        yObj.delete(start, deleteCount || 0);
-        if (items.length > 0) {
-            yObj.insert(start, items.map(normalize));
-        }
+  /* Mutation methods */
+  function splice<T>(
+    this: Y.Array<T>,
+    start: number,
+    deleteCount?: number,
+    ...items: T[]
+  ): void {
+    // turn splice into Y.Array.insert + Y.Array.delete
+    yObj.delete(start, deleteCount || 0);
+    if (items.length > 0) {
+      yObj.insert(start, items.map(normalize));
     }
+  }
 
-    function push(this: Y.Array<T>, ...items: T[]): number {
-        // turn push into Y.Array.insert
-        yObj.insert(yObj.length, items.map(normalize));
-        return yObj.length;
+  function push<T>(this: Y.Array<T>, ...items: T[]): number {
+    // turn push into Y.Array.insert
+    yObj.insert(yObj.length, items.map(normalize));
+    return yObj.length;
+  }
+
+  function map<T>(
+    this: Y.Array<T>,
+    callback: (value: T, index: number, array: Y.Array<T>) => any,
+    thisArg?: any
+  ): any[] {
+    // map over the Y.Array
+    const result: any[] = [];
+    for (let i = 0; i < yObj.length; i++) {
+      const item = proxy(yObj.get(i));
+      result.push(callback.call(thisArg, item, i, this));
     }
+    return result;
+  }
 
-    function map(
-        this: Y.Array<T>,
-        callback: (value: T, index: number, array: Y.Array<T>) => any,
-        thisArg?: any,
-    ): any[] {
-        // map over the Y.Array
-        const result: any[] = [];
-        for (let i = 0; i < yObj.length; i++) {
-            const item = proxy(yObj.get(i), tracking);
-            result.push(callback.call(thisArg, item, i, yObj));
-        }
-        return result;
+  function filter<T>(
+    this: Y.Array<T>,
+    predicate: (value: T, index: number, array: Y.Array<T>) => boolean,
+    thisArg?: any
+  ): Y.Array<T> {
+    // filter the Y.Array
+    const result = new Y.Array<T>();
+    for (let i = 0; i < yObj.length; i++) {
+      const item = proxy(yObj.get(i));
+      if (predicate.call(thisArg, item, i, this)) {
+        result.push(item);
+      }
     }
+    return result;
+  }
+  /* Non mutation methods */
+  function find<T>(
+    this: Y.Array<T>,
+    predicate: (value: T, index: number, array: Y.Array<T>) => boolean,
+    thisArg?: any
+  ): T | undefined {
+    // find an item in the Y.Array
+    for (let i = 0; i < yObj.length; i++) {
+      const item = proxy(yObj.get(i));
+      if (predicate.call(thisArg, item, i, this)) {
+        return item;
+      }
+    }
+    return undefined;
+  }
 
-    /* Non mutation methods */
-    function find(
-        this: Y.Array<T>,
-        predicate: (value: T, index: number, array: Y.Array<T>) => boolean,
-        thisArg?: any,
-    ): T | undefined {
-        // find an item in the Y.Array
-        for (let i = 0; i < yObj.length; i++) {
-            const item = proxy(yObj.get(i), tracking);
-            if (predicate.call(thisArg, item, i, yObj)) {
-                return item;
+  function indexOf<T>(
+    this: Y.Array<T>,
+    searchElement: T,
+    fromIndex?: number
+  ): number {
+    // find the index of an item in the Y.Array
+    for (let i = fromIndex || 0; i < yObj.length; i++) {
+      const item = yObj.get(i);
+      if (proxy(item) === searchElement) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  function extend<T>(this: Y.Array<T>, items: T[]): void {
+    // turn extend into Y.Array.insert
+    yObj.insert(yObj.length, items.map(normalize));
+  }
+
+  const handler: ProxyHandler<[]> = {
+    get(target: [], prop, receiver) {
+      switch (prop) {
+        case YJS:
+          // Return the underlying YJS object
+          return yObj;
+        case INTERNALS:
+          // Return internal properties (eg, observer)
+          // @ts-ignore
+          return yObj.internals;
+        case "toString":
+          return () => JSON.stringify(yObj.toJSON());
+        case "toJSON":
+          return () => {
+            if ((yObj as any).json === undefined) {
+              (yObj as any).json = yObj.toJSON();
             }
-        }
-        return undefined;
-    }
-
-    function indexOf(this: Y.Array<T>, searchElement: T, fromIndex?: number): number {
-        // find the index of an item in the Y.Array
-        for (let i = fromIndex || 0; i < yObj.length; i++) {
-            const item = yObj.get(i);
-            if (proxy(item) === searchElement) {
-                return i;
+            return (yObj as any).json;
+          };
+        case Symbol.toPrimitive:
+          return (hint: string) =>
+            hint === "string" ? JSON.stringify(yObj.toJSON()) : yObj; // for "number" / "default" hints
+        case "splice":
+          return splice;
+        case "push":
+          return push;
+        case "find":
+          return find;
+        case "length":
+          return yObj.length;
+        case "indexOf":
+          return indexOf;
+        case "map":
+          return map;
+        case "filter":
+          return filter;
+        case Symbol.iterator:
+          return function* () {
+            for (let i = 0; i < yObj.length; i++) {
+              yield proxy(yObj.get(i));
             }
-        }
-        return -1;
-    }
+          };
+      }
+      // pass through built-ins & symbols untouched
+      if (typeof prop === "symbol" || prop in Object.prototype) {
+        return Reflect.get(yObj, prop, receiver);
+      }
 
-    const handler: ProxyHandler<Y.Array<T>> = {
-        get(target: Y.Array<T>, prop, receiver) {
-            switch (prop) {
-                case YJS:
-                    // Return the underlying YJS object
-                    return target;
-                case INTERNALS:
-                    // Return internal properties (eg, observer)
-                    // @ts-ignore
-                    return target.internals;
-                case "toString":
-                    return () => JSON.stringify(target.toJSON());
-                case "toJSON":
-                    return () => target.toJSON();
-                case Symbol.toPrimitive:
-                    return (hint: string) => (hint === "string" ? JSON.stringify(target.toJSON()) : target); // for "number" / "default" hints
-                case "splice":
-                    return splice;
-                case "push":
-                    return push;
-                case "find":
-                    return find;
-                case "length":
-                    return target.length;
-                case "indexOf":
-                    return indexOf;
-                case "map":
-                    return map;
-            }
-            // pass through built-ins & symbols untouched
-            if (typeof prop === "symbol" || prop in Object.prototype) {
-                return Reflect.get(target, prop, receiver);
-            }
+      // arrays: numeric indexes & length
+      const idx = Number(prop);
+      const val = yObj.get(idx);
+      // recurse for nested Y types
+      return proxy(val);
+    },
+    set(target: [], prop, value) {
+      // arrays
+      if (prop === "length") throw new Error("Cannot set length of Y.Array");
+      const idx = Number(prop);
+      if (!Number.isInteger(idx))
+        throw new TypeError("Y.Array keys must be numeric");
+      yObj.delete(idx); // idempotent if not present
+      yObj.insert(idx, [normalize(value)]);
+      console.log("set", idx, value);
+      return true;
+    },
+    deleteProperty(target: [], prop) {
+      yObj.delete(Number(prop));
+      return false;
+    },
 
-            // arrays: numeric indexes & length
-            const idx = Number(prop);
-            const val = target.get(idx);
-            // recurse for nested Y types
-            return proxy(val, tracking);
-        },
+    has(target, prop) {
+      const idx = Number(prop);
+      return idx < yObj.length;
+    },
+    getOwnPropertyDescriptor(target, name) {
+      // Required so that Object.keys / for…in work
+      if (name === "length") {
+        return {
+          value: yObj.length,
+          writable: false,
+          enumerable: false,
+          configurable: false,
+        };
+      }
+      return {
+          enumerable : true,
+          configurable : true,
+      };
+    },
+  };
 
-        set(target: Y.Array<T>, prop, value) {
-            // arrays
-            if (prop === "length") throw new Error("Cannot set length of Y.Array");
-            const idx = Number(prop);
-            if (!Number.isInteger(idx)) throw new TypeError("Y.Array keys must be numeric");
-            target.delete(idx); // idempotent if not present
-            target.insert(idx, [normalize(value)]);
-            console.log("set", idx, value);
-            return true;
-        },
-
-        deleteProperty(target: Y.Array<T>, prop) {
-            target.delete(Number(prop));
-            return false;
-        },
-
-        ownKeys(target: Y.Array<T>) {
-            return Array.from({ length: target.length }, (_, i) => i.toString());
-        },
-        has(target, prop) {
-            const idx = Number(prop);
-            return idx < target.length;
-        },
-        getOwnPropertyDescriptor() {
-            // Required so that Object.keys / for…in work
-            return { enumerable: true, configurable: true };
-        },
-    };
-
-    return new Proxy(yObj, handler); // return the proxy
+  return new Proxy([], handler); // return the proxy
 }
 
 const yToProxyCache = new WeakMap<Y.AbstractType<any>, any>();
 
-export function proxy(val: any, tracking: boolean = false) {
-    // Check the cache first
-    let proxyVal;
-    if (!(val instanceof Y.AbstractType)) {
-        // If it's not a YJS type, return the value directly
-        return val;
-    } else if (yToProxyCache.has(val)) {
-        // If it's a YJS type, check the cache
-        proxyVal = yToProxyCache.get(val);
+function proxy(val: any) {
+  // Check the cache first
+  let proxyVal;
+  if (!(val instanceof Y.AbstractType)) {
+    // If it's not a YJS type, return the value directly
+    return val;
+  } else if (yToProxyCache.has(val)) {
+    // If it's a YJS type, check the cache
+    proxyVal = yToProxyCache.get(val);
+  } else {
+    // Create and store the proxy in the cache
+    proxyVal =
+      val instanceof Y.Map
+        ? MapProxy(val)
+        : val instanceof Y.Array
+        ? ArrayProxy(val)
+        : val;
+    if (val instanceof Y.AbstractType) {
+      yToProxyCache.set(val, proxyVal);
+    }
+
+    let internals;
+    if (!(val as any).internals) {
+      internals = {
+        observer: null,
+        weakParent: null as WeakRef<any> | null,
+        listeners: new Set<() => void>(),
+        revoked: false,
+        revoke_proxies: () => {
+          if (internals.revoked) {
+            console.error("Already revoked");
+          }
+          internals.revoked = true;
+          // Invalidate the cache when the array changes
+          yToProxyCache.delete(val);
+          internals.listeners.forEach((cb) => cb());
+          val.unobserve(internals.observer);
+          (val as any).internals.observer = null;
+          if (val.parent && (val.parent as any).internals) {
+            (val.parent as any).internals.revoke_proxies();
+          }
+        },
+        subscribe(cb: () => void) {
+          internals.listeners.add(cb);
+          return () => internals.listeners.delete(cb);
+        },
+      };
+      // @ts-ignore
+      val.internals = internals;
     } else {
-        // Create and store the proxy in the cache
-        proxyVal =
-            val instanceof Y.Map ? MapProxy(val, tracking) : val instanceof Y.Array ? ArrayProxy(val, tracking) : val;
-        if (val instanceof Y.AbstractType) {
-            yToProxyCache.set(val, proxyVal);
-        }
-
-        const internals = {
-            observer: null,
-            weakParent: null as WeakRef<any> | null,
-            listeners: new Set<() => void>(),
-            revoked: false,
-            revoke_proxies: () => {
-                if (internals.revoked) {
-                    console.error("Already revoked");
-                }
-                internals.revoked = true;
-                // Invalidate the cache when the array changes
-                yToProxyCache.delete(val);
-                internals.listeners.forEach((cb) => cb());
-                val.unobserve(internals.observer);
-                (val as any).internals.observer = null;
-                if (val.parent && (val.parent as any).internals) {
-                    (val.parent as any).internals.revoke_proxies();
-                }
-            },
-            subscribe(cb: () => void) {
-                internals.listeners.add(cb);
-                return () => internals.listeners.delete(cb);
-            },
-        };
-        // @ts-ignore
-        val.internals = internals;
+      internals = (val as any).internals;
     }
+  }
 
-    if (tracking && !(val as any).internals.observer) {
-        const observer = (event, transaction) => {
-            (val as any).internals.revoke_proxies();
-        };
-        (val as any).internals.observer = observer;
-        val.observe(observer);
-    }
+  if (tracking && !(val as any).internals.observer) {
+    const observer = (event, transaction) => {
+      (val as any).internals.revoke_proxies();
+    };
+    (val as any).internals.observer = observer;
+    val.observe(observer);
+  }
 
-    return proxyVal;
+  return proxyVal;
+}
+
+export const makeStore = proxy;
+
+let tracking = false;
+
+export function setTracking(flag: boolean) {
+  tracking = flag;
 }
 
 export function useStore<T extends object>(store: T): T {
-    const subscribe = (cb: () => void) => {
-        return proxy(store[YJS], true)[INTERNALS].subscribe(cb);
-    };
-    const getSnapshot = () => proxy(store[YJS], true);
-    return useSyncExternalStore(subscribe, getSnapshot);
+  const subscribe = (cb: () => void) => {
+    return proxy(store[YJS])[INTERNALS].subscribe(cb);
+  };
+  const getSnapshot = () => proxy(store[YJS]);
+  return useSyncExternalStore(subscribe, getSnapshot);
 }
 
 // TODO, decorator ? to toggle a "tracking" mode, where access to stored trigger observer registration

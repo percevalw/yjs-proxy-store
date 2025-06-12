@@ -1,7 +1,7 @@
 import React, { useCallback } from "react";
 import ReactDOM from "react-dom/client";
 import "./index.css";
-import { proxy, useStore } from "../lib";
+import { makeStore, useStore } from "../lib";
 
 import * as Y from "yjs";
 
@@ -20,7 +20,7 @@ ytodos.get(0).set("text", "Buy milk");
 ytodos.get(0).set("done", false);
 ytags.push(["shopping"]);
 
-const storeProxy = proxy(yroot, true);
+const storeProxy = makeStore(yroot);
 
 const useEventCallback = (callback) => {
     const callbackRef = React.useRef(callback);
