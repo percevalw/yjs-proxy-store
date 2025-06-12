@@ -131,13 +131,13 @@ function ArrayProxy<T>(yObj: Y.Array<T>) {
     this: Y.Array<T>,
     predicate: (value: T, index: number, array: Y.Array<T>) => boolean,
     thisArg?: any
-  ): Y.Array<T> {
-    // filter the Y.Array
-    const result = new Y.Array<T>();
+  ): T[] {
+    // filter the Y.Array and return a plain array
+    const result: T[] = [];
     for (let i = 0; i < yObj.length; i++) {
       const item = proxy(yObj.get(i));
       if (predicate.call(thisArg, item, i, this)) {
-        result.push(item);
+        result.push(item as any);
       }
     }
     return result;

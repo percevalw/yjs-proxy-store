@@ -5,18 +5,17 @@
   "description": "Interact with YJS shared types using simple react hooks and proxies",
   "repository": "https://github.com/percevalw/yjs-proxy-store",
   "author": "Perceval Wajsbürt <perceval.wajsburt@gmail.com>",
-  "private": "true",
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
-    "test": "react-scripts test",
+    "test": "vitest run",
     "eject": "react-scripts eject",
     "build:lib": "sh scripts/build_lib.sh",
     "prepublishOnly": "npm run build:lib"
   },
   "dependencies": {
-    "yjs": "*",
-    "use-sync-external-store": "^1.2.0"
+    "use-sync-external-store": "^1.2.0",
+    "yjs": "*"
   },
   "peerDependencies": {
     "react": ">=17.0.0",
@@ -35,6 +34,7 @@
     "@types/react-dom": "^18.2.7",
     "babel-cli": "^6.26.0",
     "css-loader": ">6.0.0",
+    "happy-dom": "^18.0.1",
     "husky": ">=6",
     "lint-staged": ">=10",
     "prettier": "^3.5.3",
@@ -43,7 +43,10 @@
     "react-dom": "^18.2.0",
     "react-scripts": "5.0.1",
     "ts-loader": "^9.5.2",
+    "ts-node": "^10.9.2",
     "typescript": "^5.8.2",
+    "vite-tsconfig-paths": "^5.1.4",
+    "vitest": "^3.2.3",
     "web-vitals": "^2.1.4"
   },
   "browserslist": {
