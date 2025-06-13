@@ -326,6 +326,7 @@ function proxy(val: any) {
                 listeners: new Set<() => void>(),
                 revoked: false,
                 revoke_proxies: () => {
+                    console.info("Revoking proxies for", val);
                     if (internals.revoked) {
                         console.error("Already revoked");
                     }
@@ -350,8 +351,7 @@ function proxy(val: any) {
             internals = (val as any).internals;
         }
     }
-
-    if (tracking && !(val as any).internals.observer) {
+    if (tracking.enabled && !(val as any).internals.observer) {
         const observer = (event, transaction) => {
             (val as any).internals.revoke_proxies();
         };
@@ -364,10 +364,10 @@ function proxy(val: any) {
 
 export const makeStore = proxy;
 
-let tracking = false;
+const tracking = { enabled: true };
 
 export function setTracking(flag: boolean) {
-    tracking = flag;
+    tracking.enabled = flag;
 }
 
 export function useStore<T extends object>(store: T): T {
